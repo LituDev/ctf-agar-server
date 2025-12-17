@@ -19,19 +19,18 @@ trap cleanup SIGINT SIGTERM
 
 echo -e "${GREEN}Starting CTF Agar Server...${NC}\n"
 
+# Get the base directory
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Start Cigar2 webserver
 echo -e "${BLUE}[Cigar2]${NC} Starting webserver..."
-cd Cigar2
-node webserver.js 2>&1 | sed "s/^/$(echo -e ${BLUE}[Cigar2]${NC}) /" &
+(cd "${BASE_DIR}/Cigar2" && node webserver.js 2>&1 | sed "s/^/$(echo -e ${BLUE}[Cigar2]${NC}) /") &
 CIGAR_PID=$!
-cd ..
 
 # Start MultiOgarII server
 echo -e "${BLUE}[MultiOgarII]${NC} Starting game server..."
-cd MultiOgarII/src
-node index 2>&1 | sed "s/^/$(echo -e ${BLUE}[MultiOgarII]${NC}) /" &
+(cd "${BASE_DIR}/MultiOgarII" && cd src && node index 2>&1 | sed "s/^/$(echo -e ${BLUE}[MultiOgarII]${NC}) /") &
 MULTIOGAR_PID=$!
-cd ../..
 
 echo -e "\n${GREEN}All services started!${NC}"
 echo -e "Cigar2 PID: ${CIGAR_PID}"
