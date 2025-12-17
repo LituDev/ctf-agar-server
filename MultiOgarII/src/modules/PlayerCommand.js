@@ -177,6 +177,18 @@ const commands = [
     new Command("restart", "restarts the server", "", UserRoleEnum.ADMIN, (player, args) => {
         Logger.warn(`RESTART REQUEST FROM ${player.socket.remoteAddress} as ` + player.userAuth);
         player.server.restart();
+    }),
+    new Command("start", "starts the tournament", "", UserRoleEnum.ADMIN, (player, args) => {
+        if (player.server.tournamentActive) {
+            return send(player, "ERROR: Tournament is already active!");
+        }
+        const success = player.server.startTournament();
+        if (success) {
+            Logger.warn(`TOURNAMENT START REQUEST FROM ${player.socket.remoteAddress} as ` + player.userAuth);
+            send(player, "Tournament started!");
+        } else {
+            send(player, "ERROR: Failed to start tournament");
+        }
     })
 ];
 

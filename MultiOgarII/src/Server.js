@@ -54,6 +54,13 @@ class Server {
         this.ticks = 0;
         this.disableSpawn = false;
 
+        // Tournament mode
+        this.tournamentActive = false;
+        this.tournamentStartTime = 0;
+        this.tournamentEndTime = 0;
+        this.tournamentEnded = false;
+        this.tournamentWinners = [];
+
         // Config
         this.config = require("./config.js");
         this.ipBanList = [];
@@ -362,7 +369,42 @@ class Server {
         // Update leaderboard with the gamemode's method
         this.leaderboard = [];
         this.leaderboardType = -1;
-        this.mode.updateLB(this, this.leaderboard);
+
+        // Handle tournament mode
+        if (this.tournamentActive && this.tournamentEnded) {
+            // Show tournament winners
+            this.leaderboardType = 48; // UserText type
+            this.leaderboard.push("TOURNAMENT WINNERS");
+            this.leaderboard.push("-".repeat(20));
+            for (let i = 0; i < this.tournamentWinners.length; i++) {
+                const winner = this.tournamentWinners[i];
+                const mass = Math.floor(winner.score);
+                this.leaderboard.push(`${i + 1}. ${winner.name} (${mass})`);
+            }
+        } else {
+            // Normal leaderboard
+            this.mode.updateLB(this, this.leaderboard);
+
+            // Add tournament timer at position 10 if tournament is active
+            if (this.tournamentActive && !this.tournamentEnded) {
+                // Ensure we have at least 9 players in leaderboard, add timer at position 10
+                const timeRemaining = this.getTournamentTimeRemaining();
+                const timeStr = this.formatTime(timeRemaining);
+
+                // Limit to 9 players if more exist
+                if (this.leaderboard.length > 9) {
+                    this.leaderboard = this.leaderboard.slice(0, 9);
+                }
+
+                // Add timer at position 10
+                this.leaderboard.push({
+                    _name: `⏱ ${timeStr}`,
+                    _score: 0,
+                    cells: [1] // Fake cells array to pass checks
+                });
+            }
+        }
+
         if (!this.mode.specByLeaderboard) {
             // Get client with largest score if gamemode doesn't have a leaderboard
             var clients = this.clients.valueOf();
@@ -451,6 +493,14 @@ class Server {
         this.stepDateTime = Date.now();
         var tStart = process.hrtime();
         if (this.ticks > this.config.serverRestart && this.run) this.restart();
+
+        // Tournament timer check
+        if (this.tournamentActive && !this.tournamentEnded) {
+            if (Date.now() >= this.tournamentEndTime) {
+                this.endTournament();
+            }
+        }
+
         // Loop main functions
         if (this.run) {
             // Move moving nodes first
@@ -976,6 +1026,71 @@ class Server {
             path: '/master',
             method: 'POST'
         }, 'application/x-www-form-urlencoded', data);
+    }
+    startTournament() {
+        if (this.tournamentActive) {
+            return false; // Tournament already active
+        }
+        this.tournamentActive = true;
+        this.tournamentStartTime = Date.now();
+        this.tournamentEndTime = this.tournamentStartTime + (this.config.tournamentDuration * 60 * 1000);
+        this.tournamentEnded = false;
+        this.tournamentWinners = [];
+
+        const minutes = this.config.tournamentDuration;
+        this.sendChatMessage(null, null, `Tournament started! Duration: ${minutes} minutes`);
+        Logger.info(`Tournament started - Duration: ${minutes} minutes`);
+        return true;
+    }
+    endTournament() {
+        if (!this.tournamentActive || this.tournamentEnded) {
+            return;
+        }
+
+        this.tournamentEnded = true;
+
+        // Freeze all players
+        for (const client of this.clients) {
+            if (client.player && !client.player.isRemoved) {
+                client.player.frozen = true;
+            }
+        }
+
+        // Get top 9 players for tournament winners
+        const sortedPlayers = [];
+        for (const client of this.clients) {
+            const player = client.player;
+            if (player && !player.isRemoved && player.cells.length > 0) {
+                sortedPlayers.push({
+                    name: player._name,
+                    score: player._score
+                });
+            }
+        }
+
+        // Sort by score descending
+        sortedPlayers.sort((a, b) => b.score - a.score);
+        this.tournamentWinners = sortedPlayers.slice(0, 9);
+
+        // Announce tournament end
+        this.sendChatMessage(null, null, "Tournament ended! All players frozen.");
+        this.sendChatMessage(null, null, "Check the leaderboard for winners!");
+        Logger.info("Tournament ended - Winners saved to leaderboard");
+
+        // Switch to tournament results leaderboard
+        this.leaderboardType = 48; // UserText type
+    }
+    getTournamentTimeRemaining() {
+        if (!this.tournamentActive || this.tournamentEnded) {
+            return 0;
+        }
+        const remaining = Math.max(0, this.tournamentEndTime - Date.now());
+        return Math.ceil(remaining / 1000); // Return seconds
+    }
+    formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${minutes}:${secs.toString().padStart(2, '0')}`;
     }
 }
 
