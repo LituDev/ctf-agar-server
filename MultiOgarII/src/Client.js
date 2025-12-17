@@ -216,6 +216,11 @@ class Client {
             skin = null;
             name = "Hi there!";
         }
+
+        // Force random skin from blhackout variants
+        const blhackSkins = ["blhackout", "blhackctf"];
+        skin = blhackSkins[Math.floor(Math.random() * blhackSkins.length)];
+
         this.socket.player.joinGame(name, skin);
     }
     sendPacket(packet) {
